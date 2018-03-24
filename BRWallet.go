@@ -100,9 +100,9 @@ func (w *BRWallet) Free() {
 }
 
 //export balanceChanged
-func balanceChanged(info unsafe.Pointer, balance uint64) {
+func balanceChanged(info unsafe.Pointer, balance C.uint64_t) {
 	if wallet := (*BRWallet)(info); wallet.BalanceChanged != nil {
-		wallet.BalanceChanged(balance)
+		wallet.BalanceChanged(uint64(balance))
 	}
 }
 
@@ -114,8 +114,8 @@ func txAdded(info unsafe.Pointer, tx *BRTransaction) {
 }
 
 //export txUpdated
-func txUpdated(info unsafe.Pointer, txHashes *C.UInt256, txCount C.size_t, blockHeight uint32, timestamp uint32) {
-	fmt.Printf("[TX Updated] txCount=%d height=%d timestamp=%d\n", txCount, blockHeight, timestamp)
+func txUpdated(info unsafe.Pointer, txHashes *C.UInt256, txCount C.size_t, blockHeight C.uint32_t, timestamp C.uint32_t) {
+	fmt.Printf("[TX Updated] txCount=%d height=%d timestamp=%d\n", txCount, uint32(blockHeight), uint32(timestamp))
 }
 
 //export txDeleted
