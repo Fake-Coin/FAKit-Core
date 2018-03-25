@@ -30,7 +30,6 @@ type BRPeerManager struct {
 	ThreadCleanup      func()
 }
 
-type BRMerkleBlock C.BRMerkleBlock
 type BRPeer C.BRPeer
 
 func BRPeerManagerNewMainNet(w *BRWallet, keyTime uint32, blocks []*BRMerkleBlock, peers []BRPeer) *BRPeerManager {
