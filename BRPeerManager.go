@@ -14,6 +14,7 @@ package FAKitCore
 // extern void threadCleanup(void *info);
 import "C"
 import (
+	"fmt"
 	"unsafe"
 )
 
@@ -21,19 +22,19 @@ type BRPeerManager struct {
 	brmgr *C.BRPeerManager
 
 	SyncStarted        func()
-	SyncStopped        func(errCode int)
+	SyncStopped        func(err error)
 	TxStatusUpdate     func()
-	SaveBlocks         func(replace bool, blocks []*BRMerkleBlock)
-	SavePeers          func(replace bool, peers []BRPeer)
+	SaveBlocks         func(blocks []*BRMerkleBlock, replace bool)
+	SavePeers          func(peers []BRPeer, replace bool)
 	NetworkIsReachable func() int
 	ThreadCleanup      func()
 }
 
-type BRMerkleBlock = *C.BRMerkleBlock
+type BRMerkleBlock C.BRMerkleBlock
 type BRPeer C.BRPeer
 
-func BRPeerManagerNewMainNet(w *BRWallet, keyTime uint32, blocks []BRMerkleBlock, peers []BRPeer) *BRPeerManager {
-	var cblocks *BRMerkleBlock
+func BRPeerManagerNewMainNet(w *BRWallet, keyTime uint32, blocks []*BRMerkleBlock, peers []BRPeer) *BRPeerManager {
+	var cblocks **BRMerkleBlock
 	if 0 < len(blocks) {
 		cblocks = &blocks[0]
 	}
@@ -45,7 +46,7 @@ func BRPeerManagerNewMainNet(w *BRWallet, keyTime uint32, blocks []BRMerkleBlock
 
 	mgr := &BRPeerManager{
 		brmgr: C.BRPeerManagerNewMainNet(w.brwallet, C.uint32_t(keyTime),
-			cblocks, C.size_t(len(blocks)),
+			(**C.BRMerkleBlock)(unsafe.Pointer(cblocks)), C.size_t(len(blocks)),
 			(*C.BRPeer)(unsafe.Pointer(cpeers)), C.size_t(len(peers))),
 	}
 
@@ -120,10 +121,20 @@ func syncStarted(info unsafe.Pointer) {
 	}
 }
 
+type SyncError int
+
+func (err SyncError) Error() string {
+	return fmt.Sprintf("syncerr(%d)", err)
+}
+
 //export syncStopped
 func syncStopped(info unsafe.Pointer, errCode C.int) {
 	if mgr := (*BRPeerManager)(info); mgr.SyncStopped != nil {
-		mgr.SyncStopped(int(errCode))
+		var err SyncError
+		if errCode != 0 {
+			err = SyncError(errCode)
+		}
+		mgr.SyncStopped(err)
 	}
 }
 
@@ -137,14 +148,31 @@ func txStatusUpdate(info unsafe.Pointer) {
 //export saveBlocks
 func saveBlocks(info unsafe.Pointer, replace C.int, blocks **C.BRMerkleBlock, blocksCount C.size_t) {
 	if mgr := (*BRPeerManager)(info); mgr.SaveBlocks != nil {
-		mgr.SaveBlocks(replace == 1, nil)
+		cBlocks := (*[1 << 30]*BRMerkleBlock)(unsafe.Pointer(blocks))[:int(blocksCount):int(blocksCount)]
+
+		// copy from c stack to go heap
+		// blocks themselves remain in c memory.
+		goBlocks := make([]*BRMerkleBlock, len(cBlocks))
+		for i, b := range cBlocks {
+			goBlocks[i] = b
+		}
+
+		mgr.SaveBlocks(goBlocks, replace == 1)
 	}
 }
 
 //export savePeers
 func savePeers(info unsafe.Pointer, replace C.int, peers *C.BRPeer, peersCount C.size_t) {
 	if mgr := (*BRPeerManager)(info); mgr.SavePeers != nil {
-		mgr.SavePeers(replace == 1, nil)
+		cPeers := (*[1 << 30]BRPeer)(unsafe.Pointer(peers))[:int(peersCount):int(peersCount)]
+
+		// copy from c stack to go heap
+		goPeers := make([]BRPeer, len(cPeers))
+		for i, p := range cPeers {
+			goPeers[i] = p
+		}
+
+		mgr.SavePeers(goPeers, replace == 1)
 	}
 }
 

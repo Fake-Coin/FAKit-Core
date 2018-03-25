@@ -10,7 +10,6 @@ package FAKitCore
 // extern void txDeleted(void *info, UInt256 txHash, int notifyUser, int recommendRescan);
 import "C"
 import (
-	"fmt"
 	"unsafe"
 )
 
@@ -115,7 +114,17 @@ func txAdded(info unsafe.Pointer, tx *BRTransaction) {
 
 //export txUpdated
 func txUpdated(info unsafe.Pointer, txHashes *C.UInt256, txCount C.size_t, blockHeight C.uint32_t, timestamp C.uint32_t) {
-	fmt.Printf("[TX Updated] txCount=%d height=%d timestamp=%d\n", txCount, uint32(blockHeight), uint32(timestamp))
+	if wallet := (*BRWallet)(info); wallet.TXAdded != nil {
+		cHash := (*[1 << 30]UInt256)(unsafe.Pointer(txHashes))[:int(txCount):int(txCount)]
+
+		// copy from c stack to go heap
+		goHash := make([]UInt256, len(cHash))
+		for i, h := range cHash {
+			goHash[i] = h
+		}
+
+		wallet.TXUpdated(goHash, uint32(blockHeight), uint32(timestamp))
+	}
 }
 
 //export txDeleted
